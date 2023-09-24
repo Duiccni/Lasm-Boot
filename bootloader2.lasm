@@ -1,0 +1,180 @@
+org 0x7c00
+
+'''
+s1986b
+C:\Python311\python.exe D:\Lasm-v1.0.x\main.py -release D:\Lasm-v1.0.x-Tests\new\test1.lasm D:\Lasm-v1.0.x-Tests\new\test1_output
+LasmBoot-v0.0.1-1.0.1
+Hello, LasmOS! (By Egemen YALIN)
+http://copy.sh/v86/debug.html
+nop|hlt|cmc|clc|stc|cli|sti|cld|std|pusha|popa|pushad|popad|ret|sret|fret|int3
+|int0|syscall|lodsb|lodsw|lodsd|jo|jno|jb|jc|jnae|jnb|jnc|jae|je|jz|jne|jnz|jbe
+|jna|ja|jnbe|js|jns|jpe|jp|jpo|jnp|jnge|jl|jle|jng|jnle|jg|jcxz|shl|rol|ror|rcl
+|rcr|sal|shr|sar|inc|dec|not|neg|push|pop|mul|div|imul|idiv|add|or|adc|sbb|and
+|sub|xor|cmp|int|def|jmp|call|mov|lodsx|test|#jmp|#set|#flush|org|con|times
+'''
+
+jmp .short &start
+nop
+
+// *** Part 0.0 ***
+// Disk description table, BIOS parameter block. (0x00B)
+
+def "lasmboot" // 8 byte name for achieve. (0x03 + 8)
+
+// https://en.wikipedia.org/wiki/BIOS_parameter_block#DOS_2.0_BPB
+// Some of those values are hard-coded cuz of floppy.
+
+// DOS 2.0 BPB
+def .word ^9 // Bytes per logical sector. (0x0B)
+def 1 // Logical sectors per cluster.
+def .word 1 // Reserved logical sectors.
+def 2 // Number of FATs
+def .word 224 // Number of entries in root dir. (Root directory entries)
+
+def .word 2880 // Total logical sectors.
+def 0xf0 // Media descriptor. (0x15)
+def .word 9 // Logical sectors per FAT.
+
+// DOS 3.31 BPB
+def .word 18 // Sectors per track. (36/cylinder)
+def .word 2 // Number of sides/heads.
+def .dword 0 // Hidden sectors.
+def .dword 0 // Large total logical sectors.
+
+// DOS 4.0 EBPB
+def 0 // Physical drive number.
+def 0 // Flags etc. (0x25)
+def 41 // Drive signature. (41 for floppy.)
+
+:volume_id    def .dword 0x3795_7642 // Volume id for LasmBoot-v0.0.1-1.0.1
+:volume_label def "LASM-OS    " // 11 character.
+def "FAT12   " // File-system type.
+
+con boot_segment 0x7c0
+con ascii_zero 0x30
+con ascii_space 0x20
+con ascii_unk 0x7E
+
+:start
+    mov ax, (&boot_segment+0x20)
+    cli
+    mov ss, ax // Start of stack segment. ((start_addr + 512) / 16)
+    mov sp, ^12 // End of stack segment. (ss + 4096)
+    sti
+
+    mov ax, &boot_segment
+    mov ds, ax
+    mov es, ax
+
+    // Bios passes boot device number in dl...
+    mov .byte *&boot_device_num, dl
+
+    '''
+    Clear screen.
+    AL (video mode)
+    https://www.minuszerodegrees.net/video/bios_video_modes.htm
+    '''
+    xor ah, ah
+    mov al, 2 // Code (0 = 40x25 Chars, Text, Greyscale)
+    int 0x10
+
+    mov bl, 123
+    call &to_int
+
+    '''
+    mov ax, 123
+    mov cl, 10
+    div cl
+
+    mov di, (&to_int_reasult-$$)
+
+    mov al, ah
+    add al, &ascii_zero
+    stosb
+    '''
+
+    mov si, (&to_int_reasult-$$)
+    call &print_string
+    jmp &end
+
+// &to_int_reasult (Output)
+:count_numbers
+    mov al, (&ascii_zero+9)
+    mov di, (&to_int_reasult-$$)
+
+:count_numbers_loop1
+    cmp al, &ascii_zero
+    je &done2
+
+    // Move char.
+    stosb
+
+    dec al
+    jmp &count_numbers_loop1
+:done2
+    mov al, 0
+    stosb
+    ret
+
+// *** ***
+// BL (Input), &to_int_reasult (Output)
+// TODO: To_Int
+:to_int
+    mov cl, 10
+    mov di, (&to_int_reasult-$$)
+:to_int_loop1
+    test bl, bl
+    jz &done3
+
+    // al := &ascii_zero + mod(bl, 10)
+    // bl := bl / 10
+    // ???
+
+    xor ah, ah
+    mov al, bl
+    div cl
+
+    mov bl, al
+
+    mov al, ah
+    add al, &ascii_zero
+    stosb
+
+    jmp &to_int_loop1
+:done3
+    mov al, 0
+    stosb
+    ret
+// *** ***
+
+:print_string
+    lodsb
+
+    test al, al
+    jz &done
+
+    mov ah, 0x0e // Bios print code.
+    int 0x10
+    jmp &print_string
+:done
+    ret
+
+:end
+    hlt
+    hlt
+    jmp $
+
+def "abcd"
+:boot_message
+def "Hello, Lasm OS.", 0
+
+:boot_device_num def 0
+
+:to_int_reasult
+times ^5 def &ascii_unk
+def 0
+
+times (^9-2-$+$$) nop
+def .word 0xaa55
+
+:buffer_end
