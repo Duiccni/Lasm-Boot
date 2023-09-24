@@ -1,0 +1,83 @@
+// LasmBoot-v0.0.1-1.0.1
+// Hello, LasmOS! (By Egemen YALIN)
+
+org 0x7c00
+
+jmp .short &start
+nop
+
+// *** Part 0.0 ***
+// Disk description table, BIOS parameter block. (0x00B)
+
+def "lasmboot" // 8 byte name for achieve. (0x03 + 8)
+
+// https://en.wikipedia.org/wiki/BIOS_parameter_block#DOS_2.0_BPB
+// Some of those values are hard-coded cuz of floppy.
+
+// DOS 2.0 BPB
+def .word ^9 // Bytes per logical sector. (0x0B)
+def 1 // Logical sectors per cluster.
+def .word 1 // Reserved logical sectors.
+def 2 // Number of FATs
+def .word 224 // Number of entries in root dir. (Root directory entries)
+
+def .word 2880 // Total logical sectors.
+def 0xf0 // Media descriptor. (0x15)
+def .word 9 // Logical sectors per FAT.
+
+// DOS 3.31 BPB
+def .word 18 // Sectors per track. (36/cylinder)
+def .word 2 // Number of sides/heads.
+def .dword 0 // Hidden sectors.
+def .dword 0 // Large total logical sectors.
+
+// DOS 4.0 EBPB
+def 0 // Physical drive number.
+def 0 // Flags etc. (0x25)
+def 41 // Drive signature. (41 for floppy.)
+
+:volume_id    def .dword 0x3795_7642 // Volume id for LasmBoot-v0.0.1-1.0.1
+:volume_label def "LASM-OS    " // 11 character.
+def "FAT12   " // File-system type.
+
+con boot_segment 0x7c0
+
+:start
+    mov ax, &boot_segment
+    mov ds, ax
+    mov es, ax
+
+    mov ax, (&boot_segment+0x20)
+    cli
+    mov ss, ax // Start of stack segment. ((start_addr + 512) / 16)
+    mov sp, ^12 // End of stack segment. (ss + 4096)
+    sti
+
+    mov si, (&boot_message-$$)
+    call &print_string
+    jmp &finnish
+
+:print_string:
+    lodsb
+
+    cmp al, 0
+    jz &done
+
+    mov ah, 0x0e // Bios print code.
+    int 0x10
+    jmp &print_string
+:done:
+    ret
+
+:end
+    hlt
+    hlt
+    jmp $
+
+def "abcdef"
+:boot_message
+def "Hello, Lasm OS.", 0
+times (^9-2-$+$$) nop
+def .word 0xaa55
+
+:buffer_end
