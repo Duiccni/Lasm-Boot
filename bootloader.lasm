@@ -1,7 +1,16 @@
-// LasmBoot-v0.0.1-1.0.1
-// Hello, LasmOS! (By Egemen YALIN)
-
 org 0x7c00
+
+'''
+C:\Python311\python.exe D:\Lasm-v1.0.x\main.py -release D:\Lasm-v1.0.x-Tests\new\test1.lasm D:\Lasm-v1.0.x-Tests\new\test1_output
+LasmBoot-v0.0.1-1.0.1
+Hello, LasmOS! (By Egemen YALIN)
+http://copy.sh/v86/debug.html
+nop|hlt|cmc|clc|stc|cli|sti|cld|std|pusha|popa|pushad|popad|ret|sret|fret|int3
+|int0|syscall|lodsb|lodsw|lodsd|jo|jno|jb|jc|jnae|jnb|jnc|jae|je|jz|jne|jnz|jbe
+|jna|ja|jnbe|js|jns|jpe|jp|jpo|jnp|jnge|jl|jle|jng|jnle|jg|jcxz|shl|rol|ror|rcl
+|rcr|sal|shr|sar|inc|dec|not|neg|push|pop|mul|div|imul|idiv|add|or|adc|sbb|and
+|sub|xor|cmp|int|def|jmp|call|mov|lodsx|test|#jmp|#set|#flush|org|con|times
+'''
 
 jmp .short &start
 nop
@@ -43,30 +52,42 @@ def "FAT12   " // File-system type.
 con boot_segment 0x7c0
 
 :start
-    mov ax, &boot_segment
-    mov ds, ax
-    mov es, ax
-
     mov ax, (&boot_segment+0x20)
     cli
     mov ss, ax // Start of stack segment. ((start_addr + 512) / 16)
     mov sp, ^12 // End of stack segment. (ss + 4096)
     sti
 
+    mov ax, &boot_segment
+    mov ds, ax
+    mov es, ax
+
+    // Bios passes boot device number in dl...
+    mov .byte *&boot_device_num, dl
+
+    '''
+    Clear screen.
+    AL (video mode)
+    https://www.minuszerodegrees.net/video/bios_video_modes.htm
+    '''
+    xor ah, ah
+    mov al, 2 // Code (0 = 40x25 Chars, Text, Greyscale)
+    int 0x10
+
     mov si, (&boot_message-$$)
     call &print_string
-    jmp &finnish
+    jmp &end
 
-:print_string:
+:print_string
     lodsb
 
-    cmp al, 0
+    test al, al
     jz &done
 
     mov ah, 0x0e // Bios print code.
     int 0x10
     jmp &print_string
-:done:
+:done
     ret
 
 :end
@@ -74,9 +95,12 @@ con boot_segment 0x7c0
     hlt
     jmp $
 
-def "abcdef"
+def "abcd"
 :boot_message
 def "Hello, Lasm OS.", 0
+
+:boot_device_num def 0
+
 times (^9-2-$+$$) nop
 def .word 0xaa55
 
